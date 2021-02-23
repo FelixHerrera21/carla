@@ -37,11 +37,11 @@ def handleArgs():
 	parser.add_argument('-e', '--entrada', help='entrada a utilizar', default = 'lidar')
 	parser.add_argument('-r', '--render', help='renderizar', default = 'si')
 
-	parser.add_argument('-i', '--iter', help='iteraciones', default = '1')
-	parser.add_argument('-p', '--pob', help='poblacion', default = '10')
-	parser.add_argument('-g', '--gen', help='generaciones', default = '3')
+	parser.add_argument('-i', '--iter', help='iteraciones', default = '2')
+	parser.add_argument('-p', '--pob', help='poblacion', default = '5')
+	parser.add_argument('-g', '--gen', help='generaciones', default = '5')
 
-	parser.add_argument('-c', '--car', help='carros', default = '0')
+	parser.add_argument('-c', '--car', help='carros', default = '10')
 	#parser.add_argument('-g', '--gen', help='generaciones', default = '40')
 
 	args = vars(parser.parse_args())
@@ -216,7 +216,7 @@ bp_line_invasion = blueprint_library.find('sensor.other.lane_invasion')
 
 ####################### Red nn #################################################
 
-nn = [3, 5, 2]  # número de neuronas por capa
+nn = [3, 7, 2]  # número de neuronas por capa
 
 # secuencia de capas
 model = kr.Sequential()
@@ -385,7 +385,7 @@ def funcion_Aptitud_Recta(vector, ubicacion_spawn):
 		v = vehicle.get_velocity()
 		kmh = 3.6 * math.sqrt(v.x **2 + v.y**2 + v.z**2)
 
-		if(vectorSensores[1] > 0.8) and velocidad < 0.16:
+		if(vectorSensores[1] > 0.8) and velocidad < 0.16 and kmh < 4:
 			fx = fx - 100
 			break
 
@@ -400,7 +400,7 @@ def funcion_Aptitud_Recta(vector, ubicacion_spawn):
 
 		if(len(line_hist)>0):
 			line_hist = []
-			fx = fx - 1
+			fx = fx - 3
 
 		d1 = np.linalg.norm(pos_Actual - last_Point)
 		
@@ -456,16 +456,19 @@ class Particula:
 		for x in range(len(self.sp_points)):
 			self.particula_aptitud = self.particula_aptitud + funcion_Aptitud_Recta(self.particula_pos, self.sp_points[x])
 		#self.particula_aptitud = self.particula_aptitud + funcion_Aptitud_Recta(self.particula_pos)
+		self.particula_aptitud = self.particula_aptitud/len(self.sp_points)
 		print(self.particula_aptitud)
 		self.particula_pbest=self.particula_aptitud
 		self.particula_pbest_pos=self.particula_pos
 
 	def evaluar(self):
+		self.particula_aptitud = 0
 		for x in range(len(self.sp_points)):
 			self.particula_aptitud = self.particula_aptitud + funcion_Aptitud_Recta(self.particula_pos, self.sp_points[x])
 		#self.particula_aptitud=funcion_Aptitud_Recta(self.particula_pos)
 		#print("segunda")
 		#self.particula_aptitud=self.particula_aptitud + funcion_Aptitud_Recta(self.particula_pos)
+		self.particula_aptitud = self.particula_aptitud/len(self.sp_points)
 		print(self.particula_aptitud)
 
 		if (self.particula_aptitud > self.particula_pbest):
@@ -508,6 +511,13 @@ for vehiculosRelleno in range(int(args['car'])):
 puntos_de_spawn =[]
 for iter_aptitud in range(int(args['iter'])):
 	puntos_de_spawn.append(random.choice(world.get_map().get_spawn_points()))
+
+puntos_de_spawn[0].location.x = 245 #100
+puntos_de_spawn[0].location.y = -40 #6
+puntos_de_spawn[0].location.z = 0.3
+puntos_de_spawn[0].rotation.pitch = 0
+puntos_de_spawn[0].rotation.yaw = -91
+puntos_de_spawn[0].rotation.roll = 0
 
 print("puntos spawn: ")
 print(puntos_de_spawn)
@@ -557,6 +567,7 @@ for i in range(cantidadParticulas):
 		if(enjambre[i].particula_aptitud > gbest):
 			gbest = enjambre[i].particula_aptitud
 			gbest_pos = enjambre[i].particula_pos
+			model.save(target_dir + 'gen_' + str(0) + '_red_' + identificadorPrueba + '.h5')
 	f.write(str(enjambre[i].particula_aptitud) + "\n")
 print("\tmejor generacion", gbest)
 f.close()
@@ -573,10 +584,10 @@ for g in range(generaciones):
 		if enjambre[i].particula_aptitud > gbest:
 			gbest = enjambre[i].particula_aptitud
 			gbest_pos = enjambre[i].particula_pos
-			#model.save(target_dir + 'gen:_' + str(g) + '_red_' + identificadorPrueba + '.h5')
-			f2 = open ((target_dir + 'gen:_' + str(g) + '_red_' + identificadorPrueba +'.txt'),'w')
-			f2.write(str(gbest_pos))
-			f2.close()
+			model.save(target_dir + 'gen_' + str(g) + '_red_' + identificadorPrueba + '.h5')
+			#f2 = open ((target_dir + 'gen:_' + str(g) + '_red_' + identificadorPrueba +'.txt'),'w')
+			#f2.write(str(gbest_pos))
+			#f2.close()
 		f.write(str(enjambre[i].particula_aptitud) + "\n")
 		
 	for i in range(cantidadParticulas):
