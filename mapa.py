@@ -2,6 +2,7 @@
 import glob
 import os
 import sys
+import matplotlib.pyplot as plt
 
 #carpeta
 try:
@@ -21,10 +22,11 @@ import numpy as np
 import cv2
 import math
 import copy
-import tensorflow as tf
-import tensorflow.keras as kr
+#import tensorflow as tf
+#import tensorflow.keras as kr
 import logging
 import argparse
+import json
 
 os.environ['TF_CPP_MIN_LOG_LEVEL']='3'
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
@@ -34,6 +36,7 @@ IM_HEIGHT = 400
 
 vectorSensores = None
 imagenGrabar = None
+
 
 def grabar_img(image):
 	global imagenGrabar
@@ -131,6 +134,7 @@ def init_carla():
 	client.set_timeout(2.0)
 
 	world = client.get_world()
+	"""
 	settings = world.get_settings()
 
 	weather = carla.WeatherParameters(
@@ -139,13 +143,13 @@ def init_carla():
 		sun_altitude_angle=70.0)
 
 	world.set_weather(weather)
-
+	
 	#if args['render'] == "no":
 	#	settings.no_rendering_mode = True
 	#settings.no_rendering_mode = False
 	world.apply_settings(settings)
 	time.sleep(3)
-
+	"""
 	blueprint_library = world.get_blueprint_library()
 
 	#########################      Plantillas   #####################################
@@ -223,7 +227,7 @@ def spawn_camera(blueprint_library, world, vehicle, actor_list):
 	return sensor_Grabar
 
 #funcion aceleracion y direccion
-def funcion1(model, world, vehicle, actor_list):
+def control_function(model, world, vehicle, actor_list):
 	global vectorSensores, imagenGrabar
 	while (True):
 		arregloEntrada = np.array([vectorSensores])
@@ -236,8 +240,8 @@ def funcion1(model, world, vehicle, actor_list):
 		if(kmh > 30):
 			velocidad = 0
 		
-		vehicle.apply_control(carla.VehicleControl(throttle=float(velocidad), steer=float(direccion)))
-		#vehicleObstacle.set_autopilot(True)
+		#vehicle.apply_control(carla.VehicleControl(throttle=float(velocidad), steer=float(direccion)))
+		vehicle.set_autopilot(True)
 		
 		#if(len(collision_hist)>0):
 		#	break
@@ -261,18 +265,92 @@ def handleArgs():
 	args = vars(parser.parse_args())
 	return args
 
+def single_lane(waypoint_list, lane):
+	waypoints = []
+	for i in range(len(waypoint_list) - 1):
+		if waypoint_list[i].lane_id == lane:
+			waypoints.append(waypoint_list[i])
+	return waypoints
+
+def get_curvy_waypoints(waypoints):
+	curvy_waypoints = []
+	for i in range(len(waypoints) - 1):
+		x1 = waypoints[i].transform.location.x
+		y1 = waypoints[i].transform.location.y
+		x2 = waypoints[i+1].transform.location.x
+		y2 = waypoints[i+1].transform.location.y
+		if (abs(x1 - x2) > 1) and (abs(y1 - y2) > 1):
+			print("x1: " + str(x1) + "  x2: " + str(x2))
+			print(abs(x1 - x2))
+			print("y1: " + str(y1) + "  y2: " + str(y2))
+			print(abs(y1 - y2))
+			curvy_waypoints.append(waypoints[i])
+	curvy_waypoints.append(curvy_waypoints[0])
+	return curvy_waypoints
+
 args = handleArgs()
 
-modelo = kr.models.load_model(args['entrada'])
+#modelo = kr.models.load_model(args['entrada'])
 
 [world, blueprint_library] = init_carla()
+
+map1 = world.get_map()
+waypoints = map1.generate_waypoints(20)
+#print(waypoints[:5])
+
+print("Length: " + str(len(waypoints)))
+#print(waypoints[0].transform.location.x)
+
+#mantener solo los de un tipo
+#waypoints = single_lane(waypoints, -3)
+
+#solo mantener curvas
+#waypoints = get_curvy_waypoints(waypoints)
+
+#graficar waypoints
+x = [p.transform.location.x for p in waypoints]
+y = [p.transform.location.y for p in waypoints]
+
+plt.plot(x, y, 'bo',  marker = 'o', color = 'b')
+
+
+
+#wp de prueba(rojo)
+wp_prueba = waypoints[90]
+plt.plot([wp_prueba.transform.location.x], [wp_prueba.transform.location.y], 'bo',  marker = 'o', color = 'r')
+
+
+#ejemplo next (verde)
+next_wp = wp_prueba.next(5)
+#print(type(next_wp))
+#print(len(next_wp))
+plt.plot([next_wp[0].transform.location.x], [next_wp[0].transform.location.y], 'bo',  marker = 'o', color = 'g')
+
+ruta = []
+
+for i in range(1,100):
+	next_wp = next_wp[-1].next(5)
+	x = next_wp[-1].transform.location.x
+	y = next_wp[-1].transform.location.y
+	plt.plot([x], [y], 'bo',  marker = 'o', color = 'g')
+	ruta.append({'x': x,'y': y})
+	#print(len(next_wp))
+
+mapa_json = json.dumps(ruta)
+
+print(type(mapa_json))
+#print(mapa_json)
+
+plt.savefig("mapa.png")
+
+"""
 actor_list = []
+
 vehicle = spawn_car(blueprint_library, random.choice(world.get_map().get_spawn_points()), world, actor_list)
 
 lidar = spawn_lidar( blueprint_library, world, vehicle, actor_list)
-
 collision = spawn_colision(blueprint_library, world, vehicle, actor_list)
-
 camera = spawn_camera(blueprint_library, world, vehicle, actor_list)
 
-funcion1(modelo, world, vehicle, actor_list)
+control_function(modelo, world, vehicle, actor_list)
+"""
