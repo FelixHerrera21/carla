@@ -38,13 +38,12 @@ def handleArgs():
 	parser.add_argument('-e', '--entrada', help='entrada a utilizar', default = 'lidar')
 	parser.add_argument('-r', '--render', help='renderizar', default = 'si')
 
-	parser.add_argument('-i', '--iter', help='iteraciones', default = '2')
-	parser.add_argument('-p', '--pob', help='poblacion', default = '5')
+	parser.add_argument('-i', '--iter', help='iteraciones', default = '1')
+	parser.add_argument('-p', '--pob', help='poblacion', default = '10')
 	parser.add_argument('-g', '--gen', help='generaciones', default = '5')
 
-	parser.add_argument('-c', '--car', help='carros', default = '10')
-	#parser.add_argument('-g', '--gen', help='generaciones', default = '40')
-	parser.add_argument('-wp', '--waypoints', help='waypoints', default = '')
+	parser.add_argument('-c', '--car', help='carros', default = '0')
+	parser.add_argument('-w', '--waypoints', help='waypoints', default = 'ruta.json')
 
 	args = vars(parser.parse_args())
 
@@ -173,10 +172,10 @@ weather = carla.WeatherParameters(
 	sun_altitude_angle=70.0)
 
 world.set_weather(weather)
-
+settings.no_rendering_mode = False
 if args['render'] == "no":
 	settings.no_rendering_mode = True
-#settings.no_rendering_mode = False
+
 world.apply_settings(settings)
 time.sleep(3)
 
@@ -262,63 +261,22 @@ def funcion_Aptitud_Recta(vector, ruta):
 	vector = np.array(vector)
 	actor_list = []
 	bandera = True
-	#spawn_Auto = ruta[0]
-	#print(spawn_Auto)
-	#Auto
-	auxiliar = 0
+
 	while bandera:
-		try: 
-			#spawn_Auto1 = random.choice(world.get_map().get_spawn_points())
-			#spawn_Auto = ruta[0].transform
-			#print(spawn_Auto)
-			#print(spawn_Auto.location, spawn_Auto.rotation)
-			#print("hola!!")
-			#print(spawn_Auto1.location.z)
-			#ubicacion tunel
-			#spawn_Auto.location.x = 245 #100
-			#spawn_Auto.location.y = -40 #6
-			#print(ruta[auxiliar].x, ruta[auxiliar])
-			"""
-			spawn_Auto.location.x = ruta[auxiliar]['x']
-			spawn_Auto.location.y = ruta[auxiliar]['y']
-			spawn_Auto.location.z = ruta[auxiliar]['z']
-			spawn_Auto.rotation.pitch = ruta[auxiliar]['pitch']
-			spawn_Auto.rotation.yaw = ruta[auxiliar]['yaw']
-			spawn_Auto.rotation.roll = ruta[auxiliar]['roll']
-			"""
-			spawn_Auto = carla.Transform(carla.Location(x = ruta[auxiliar]['x'], y = ruta[auxiliar]['y'], z = ruta[auxiliar]['z']), carla.Rotation(yaw = ruta[auxiliar]['yaw']))
+		try:
+			spawn_Auto = carla.Transform(carla.Location(x = ruta[0]['x'], y = ruta[0]['y'], z = ruta[0]['z']), carla.Rotation(yaw = ruta[0]['yaw']))
+			#spawn_Auto = ruta[0]
 			vehicle = world.spawn_actor(bp_Auto, spawn_Auto)
 
-			"""#vehiculo obstaculo
-			spawn_Auto.location.x = 244
-			spawn_Auto.rotation.yaw = -88
-			spawn_Auto.location.y = -65 #6
-			vehicleObstacle = world.spawn_actor(bp_Auto, spawn_Auto)
-			"""
 			bandera = False
 		except:
-			
 			print("colicion en spawn")
 			sys.exit()
-			#auxiliar = auxiliar + 1
-			#print(auxiliar)
 			bandera = True
 
 	actor_list.append(vehicle)
 	############################################################################################
 
-	#'vehicle.*'
-	#blueprintsWalkers = world.get_blueprint_library().filter('walker.pedestrian.*')
-	#walker_bp = random.choice(blueprintsWalkers)
-	#SpawnActor(walker_bp, spawn_point)
-
-	############################################################################################
-
-
-	#actor_list.append(vehicleObstacle)
-	#vehicleObstacle.apply_control(carla.VehicleControl(throttle=float(1), steer=float(0)))
-	#vehicleObstacle.set_autopilot(True)
-	#Entrada
 	if args['entrada'] == "rgb":
 		spawn_Lidar = carla.Transform(carla.Location(x=2.5, z=2), carla.Rotation(pitch=-30))
 	if args['entrada'] == "lidar":
@@ -379,23 +337,56 @@ def funcion_Aptitud_Recta(vector, ruta):
 
 	freno = 0
 	acelerador = 0
+	fx = 0
 
 	time.sleep(2)
 	
+	indice_sig_wp = 1
+	epsilon = 3
+	wp_conseguidos = 0
+
+	#pos vehiculo
 	pos_Inicial = vehicle.get_transform()
 	pos_Inicial = np.array((pos_Inicial.location.x, pos_Inicial.location.y))
 
-	last_Point = pos_Inicial
+	#pos waypoint
+	pos_sig_wp = np.array((ruta[indice_sig_wp]['x'], ruta[indice_sig_wp]['y']))
 
-	d0 = 0
-	fx = 0
-	con=0
-
+	d0 = np.linalg.norm(pos_Inicial - pos_sig_wp)
+	d0 = d0 + 0.1
 	while (True):
+		#pos vehiculo
 		pos_Actual = vehicle.get_transform()
 		pos_Actual = np.array((pos_Actual.location.x, pos_Actual.location.y))
 
+		#pos waypoint
+		pos_sig_wp = np.array((ruta[indice_sig_wp]['x'], ruta[indice_sig_wp]['y']))
+
+		#distancia
+		dist_al_wp = np.linalg.norm(pos_Actual - pos_sig_wp)
+
+
+		if(dist_al_wp <= d0):
+			fx = fx + 1
+			d0 = dist_al_wp
+			d0 = d0 + 0.1
+		else:
+			#return fx
+			break
+			#pass
+
+		if(dist_al_wp < epsilon):
+			fx = fx + 1
+			indice_sig_wp = indice_sig_wp + 1
+			pos_sig_wp = np.array((ruta[indice_sig_wp]['x'], ruta[indice_sig_wp]['y']))
+			d0 = np.linalg.norm(pos_Actual - pos_sig_wp)
+			d0 = d0 + 0.1
+			wp_conseguidos = wp_conseguidos + 1
+
+		#lectura sensores
 		arregloEntrada = np.array([vectorSensores])
+		
+		#prediccion
 		direccion, velocidad = model.predict(arregloEntrada)[0]
 		direccion = direccion * 2 - 1
 
@@ -410,26 +401,21 @@ def funcion_Aptitud_Recta(vector, ruta):
 			velocidad = 0
 		
 		vehicle.apply_control(carla.VehicleControl(throttle=float(velocidad), steer=float(direccion)))
-		#vehicleObstacle.set_autopilot(True)
+		#vehicle.set_autopilot(True)
+		
+		#vehicle.apply_control(carla.VehicleControl(throttle=float(0.6), steer=float(0.0)))
 		
 		if(len(collision_hist)>0):
 			break
 
-		if(len(line_hist)>0):
-			line_hist = []
-			fx = fx - 3
+		#if(len(line_hist)>0):
+		#	line_hist = []
+		#	fx = fx - 3
 
-		d1 = np.linalg.norm(pos_Actual - last_Point)
-		
 		if(kmh < 10):
 			fx = fx - 1
 
-		if(d1 < d0):
-			fx = fx - 5
-		else:
-			fx = fx + 1
-
-		d0=d1
+		
 
 		#Mostrar datos en tiempo real
 		font = cv2.FONT_HERSHEY_SIMPLEX
@@ -441,6 +427,19 @@ def funcion_Aptitud_Recta(vector, ruta):
 		cv2.putText(frame,texto,(0,75), font, 0.8,(255,255,255),1,cv2.LINE_AA)
 		texto = ' kmh:' + str("%.3f" % kmh)
 		cv2.putText(frame,texto,(0,100), font, 0.8,(255,255,255),1,cv2.LINE_AA)
+		texto = ' distancia wp:' + str(dist_al_wp)
+		cv2.putText(frame,texto,(0,125), font, 0.8,(255,255,255),1,cv2.LINE_AA)
+
+		texto = ' d0:' + str(d0)
+		cv2.putText(frame,texto,(0,150), font, 0.8,(255,255,255),1,cv2.LINE_AA)
+		"""
+		texto = ' wp:' + str(pos_sig_wp)
+		cv2.putText(frame,texto,(0,150), font, 0.8,(255,255,255),1,cv2.LINE_AA)
+		texto = ' wp:' + str(pos_Actual)
+		cv2.putText(frame,texto,(0,175), font, 0.8,(255,255,255),1,cv2.LINE_AA)
+		"""
+		texto = ' conseguidos:' + str(wp_conseguidos)
+		cv2.putText(frame,texto,(0,175), font, 0.8,(255,255,255),1,cv2.LINE_AA)
 		
 		cv2.imshow("sensor lidar", frame)
 		
@@ -449,11 +448,21 @@ def funcion_Aptitud_Recta(vector, ruta):
 			#salidaVideo.write(imagenGrabar)
 		tecla = cv2.waitKey(1)
 
-		if(fx < -100):
+		if (tecla & 0xFF) == ord("q"):
+			#cv2.destroyAllWindows()
 			break
+			
+		if (tecla & 0xFF) == ord("s"):
+			cv2.destroyAllWindows()
+			for actor in actor_list:
+				actor.destroy()
+			sys.exit()
+			break
+		#if(fx < -100):
+		#	break
 
 	for actor in actor_list:
-	    actor.destroy()
+		actor.destroy()
 
 	return fx
 ###########################################################################################	
@@ -519,38 +528,14 @@ class Particula:
 		print(self.particula_velocidad)
 
 #####################################################################################################
-"""
-relleno_lista = []
-for vehiculosRelleno in range(int(args['car'])):
-	relleno_bp = random.choice(blueprint_library.filter('vehicle.*'))
-	spawn_relleno = random.choice(world.get_map().get_spawn_points())
-	vehiculo_relleno = world.spawn_actor(relleno_bp, spawn_relleno)
-	vehiculo_relleno.set_autopilot(True)
-	relleno_lista.append(vehiculo_relleno)
 
-puntos_de_spawn =[]
-for iter_aptitud in range(int(args['iter'])):
-	puntos_de_spawn.append(random.choice(world.get_map().get_spawn_points()))
-
-puntos_de_spawn[0].location.x = 245 #100
-puntos_de_spawn[0].location.y = -40 #6
-puntos_de_spawn[0].location.z = 0.3
-puntos_de_spawn[0].rotation.pitch = 0
-puntos_de_spawn[0].rotation.yaw = -91
-puntos_de_spawn[0].rotation.roll = 0
-
-print("puntos spawn: ")
-print(puntos_de_spawn)
-"""
-
-archivo_waypoints = open (('ruta.json'),'r')
-
+archivo_waypoints = open ((args['waypoints']),'r')
 ruta = archivo_waypoints.read()
 archivo_waypoints.close()
 
 ruta = json.loads(ruta)
 
-print(ruta)
+#print(ruta)
 #####################################################################################################
 
 identificadorPrueba = '_' + args['iter'] + '_' + args['pob'] +'_'+ args['gen']+'_'+ args['car']
